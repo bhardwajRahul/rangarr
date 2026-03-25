@@ -1,0 +1,27 @@
+# Rangarr Configuration.
+# See https://github.com/JudoChinX/rangarr for documentation.
+
+global:
+  interval: 3600
+
+instances:
+  sonarr-tv:
+    type: sonarr
+    host: "http://sonarr:8989"     # Use container hostname for Docker deployments
+    api_key: "YOUR_SONARR_KEY"
+
+  radarr:
+    type: radarr
+    host: "http://radarr:7878"     # Use container hostname for Docker deployments
+    api_key: "YOUR_RADARR_KEY"
+    enabled: true
+
+  radarr-4k:
+    type: radarr
+    host: "http://radarr-4k:7879"  # Use container hostname for Docker deployments
+    api_key: "ANOTHER_KEY"
+
+  lidarr-music:
+    type: lidarr
+    host: "http://lidarr:8686"     # Use container hostname for Docker deployments
+    api_key: "YOUR_LIDARR_KEY"

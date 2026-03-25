@@ -1,0 +1,12 @@
+services:
+  rangarr:
+    image: judochinx/rangarr:latest
+    container_name: rangarr
+    hostname: rangarr
+    restart: unless-stopped  # Restart automatically unless manually stopped.
+    environment:
+      TZ: UTC  # Set your timezone for log timestamps (e.g. America/New_York, Europe/London).
+      LOG_LEVEL: INFO  # Use DEBUG for verbose logging.
+    volumes:
+      - ./config.yaml:/app/config/config.yaml:ro  # Mount config as read-only.
+    # View logs with: docker compose logs -f.

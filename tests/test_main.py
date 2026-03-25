@@ -1,0 +1,374 @@
+"""Tests for main.py entry point and search logic."""
+
+from typing import Any
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
+import pytest
+
+from rangarr.config_parser import get_setting_default
+from rangarr.main import _calculate_batch
+from rangarr.main import _calculate_eta
+from rangarr.main import _format_batch_info
+from rangarr.main import build_arr_clients
+
+
+def _make_run_config(
+    missing_batch_size: Any = None,
+    upgrade_batch_size: Any = None,
+) -> Any:
+    """Build a minimal valid run config dict with optional batch size overrides."""
+    return {
+        'global_settings': {
+            'run_interval_minutes': 60,
+            'missing_batch_size': missing_batch_size
+            if missing_batch_size is not None
+            else get_setting_default('missing_batch_size'),
+            'upgrade_batch_size': upgrade_batch_size
+            if upgrade_batch_size is not None
+            else get_setting_default('upgrade_batch_size'),
+            'stagger_interval_seconds': 5,
+            'retry_interval_days': 0,
+            'search_order': 'alphabetical_ascending',
+        },
+        'instances': {},
+    }
+
+
+_build_clients_cases = {
+    'empty': {
+        'instances_config': {},
+        'settings': {},
+        'expected_count': 0,
+    },
+    'single_radarr': {
+        'instances_config': {
+            'radarr': [
+                {
+                    'name': 'Test Radarr',
+                    'url': 'http://test',
+                    'api_key': 'abc123',
+                    'enabled': True,
+                }
+            ]
+        },
+        'settings': {},
+        'expected_count': 1,
+        'expected_name': 'Test Radarr',
+        'expected_weight': 1.0,
+    },
+    'multiple_with_weights': {
+        'instances_config': {
+            'radarr': [
+                {
+                    'name': 'Radarr One',
+                    'url': 'http://test',
+                    'api_key': 'key1',
+                    'weight': 2.0,
+                    'enabled': True,
+                }
+            ],
+            'sonarr': [
+                {
+                    'name': 'Sonarr One',
+                    'url': 'http://test',
+                    'api_key': 'key2',
+                    'weight': 1.5,
+                    'enabled': True,
+                }
+            ],
+        },
+        'settings': {},
+        'expected_count': 2,
+        'expected_weights': [2.0, 1.5],
+    },
+    'with_disabled': {
+        'instances_config': {
+            'radarr': [
+                {
+                    'name': 'Active Radarr',
+                    'url': 'http://test',
+                    'api_key': 'key1',
+                    'enabled': True,
+                },
+                {
+                    'name': 'Inactive Radarr',
+                    'url': 'http://localhost:7879',
+                    'api_key': 'key2',
+                    'enabled': False,
+                },
+            ]
+        },
+        'settings': {},
+        'expected_count': 1,
+        'expected_inactive': 1,
+    },
+}
+
+_run_cases = {
+    'loads_volume_config_first': {
+        'config_file_exists': 'config/config.yaml',
+        'has_clients': True,
+        'expected_config_path': 'config/config.yaml',
+    },
+    'falls_back_to_local_config': {
+        'config_file_exists': 'config.yaml',
+        'has_clients': True,
+        'expected_config_path': 'config.yaml',
+    },
+    'exits_when_no_config_found': {
+        'config_file_exists': None,
+        'has_clients': False,
+        'expected_exit_code': 1,
+    },
+    'exits_when_no_clients': {
+        'config_file_exists': 'config.yaml',
+        'has_clients': False,
+        'expected_exit_code': 1,
+    },
+    'exits_when_config_is_invalid': {
+        'config_file_exists': 'config.yaml',
+        'has_clients': False,
+        'load_config_raises': True,
+        'expected_exit_code': 1,
+    },
+    'continues_on_file_not_found': {
+        'config_file_exists': 'config/config.yaml',
+        'has_clients': False,
+        'load_config_raises': 'FileNotFoundError',
+        'expected_exit_code': 1,
+    },
+    'triggers_search_when_items_found': {
+        'config_file_exists': 'config.yaml',
+        'has_clients': True,
+        'media_to_return': [(1, 'missing', 'Movie A')],
+        'expected_trigger_called': True,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'instances_config, settings, expected_count, expected_inactive, expected_name, expected_weights',
+    [
+        (
+            case['instances_config'],
+            case['settings'],
+            case['expected_count'],
+            case.get('expected_inactive', 0),
+            case.get('expected_name'),
+            case.get('expected_weights'),
+        )
+        for case in _build_clients_cases.values()
+    ],
+    ids=list(_build_clients_cases.keys()),
+)
+def test_build_arr_clients(
+    instances_config: Any,
+    settings: Any,
+    expected_count: Any,
+    expected_inactive: Any,
+    expected_name: Any,
+    expected_weights: Any,
+) -> None:
+    """Test build_arr_clients instantiates clients correctly."""
+    clients, inactive = build_arr_clients(instances_config, settings)
+    assert len(clients) == expected_count
+    assert inactive == expected_inactive
+
+    if expected_count > 0:
+        if expected_name:
+            assert clients[0].name == expected_name
+        if expected_weights:
+            for index, weight in enumerate(expected_weights):
+                assert clients[index].weight == weight
+
+
+_calculate_eta_cases = {
+    'no_stagger_returns_empty_string': {
+        'item_count': 5,
+        'stagger_seconds': 0,
+        'expected': '',
+    },
+    'with_stagger_returns_formatted_eta': {
+        'item_count': 3,
+        'stagger_seconds': 10,
+        'expected': ' (1 every 10 seconds, ETA: 0:00:30)',
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'item_count, stagger_seconds, expected',
+    [(case['item_count'], case['stagger_seconds'], case['expected']) for case in _calculate_eta_cases.values()],
+    ids=list(_calculate_eta_cases.keys()),
+)
+def test_calculate_eta(item_count: int, stagger_seconds: int, expected: str) -> None:
+    """Test _calculate_eta returns empty string with no stagger and formatted ETA otherwise."""
+    assert _calculate_eta(item_count, stagger_seconds) == expected
+
+
+_format_batch_info_cases = {
+    'counts_missing_and_upgrade': {
+        'client_name': 'Test',
+        'ids': [(1, 'missing', 'Item A'), (2, 'upgrade', 'Item B'), (3, 'missing', 'Item C')],
+        'stagger_seconds': 0,
+        'expected_missing': 2,
+        'expected_upgrade': 1,
+        'expected_total': 3,
+    },
+    'empty_ids_returns_zero_counts': {
+        'client_name': 'Test',
+        'ids': [],
+        'stagger_seconds': 0,
+        'expected_missing': 0,
+        'expected_upgrade': 0,
+        'expected_total': 0,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'client_name, ids, stagger_seconds, expected_missing, expected_upgrade, expected_total',
+    [
+        (
+            case['client_name'],
+            case['ids'],
+            case['stagger_seconds'],
+            case['expected_missing'],
+            case['expected_upgrade'],
+            case['expected_total'],
+        )
+        for case in _format_batch_info_cases.values()
+    ],
+    ids=list(_format_batch_info_cases.keys()),
+)
+def test_format_batch_info(
+    client_name: str,
+    ids: list[tuple[int, str, str]],
+    stagger_seconds: int,
+    expected_missing: int,
+    expected_upgrade: int,
+    expected_total: int,
+) -> None:
+    """Test _format_batch_info includes correct item counts in the output string."""
+    result = _format_batch_info(client_name, ids, stagger_seconds)
+    assert f'{expected_total} item(s)' in result
+    assert f'{expected_missing} missing' in result
+    assert f'{expected_upgrade} upgrade' in result
+
+
+_calculate_batch_cases = {
+    'full_share': {
+        'global_batch': 20,
+        'weight_share': 1.0,
+        'expected': 20,
+    },
+    'half_share': {
+        'global_batch': 20,
+        'weight_share': 0.5,
+        'expected': 10,
+    },
+    'rounds_to_nearest_int_down': {
+        'global_batch': 20,
+        'weight_share': 0.33,
+        'expected': 7,
+    },
+    'rounds_to_nearest_int_up': {
+        'global_batch': 20,
+        'weight_share': 0.67,
+        'expected': 13,
+    },
+    'zero_global_batch': {
+        'global_batch': 0,
+        'weight_share': 1.0,
+        'expected': 0,
+    },
+    'zero_weight_share': {
+        'global_batch': 20,
+        'weight_share': 0.0,
+        'expected': 1,
+    },
+    'minimum_is_one': {
+        'global_batch': 10,
+        'weight_share': 0.01,
+        'expected': 1,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    'global_batch, weight_share, expected',
+    [(case['global_batch'], case['weight_share'], case['expected']) for case in _calculate_batch_cases.values()],
+    ids=list(_calculate_batch_cases.keys()),
+)
+def test_calculate_batch(global_batch: int, weight_share: float, expected: int) -> None:
+    """Test _calculate_batch distributes appropriately and bounds to minimum 1 when global > 0."""
+    assert _calculate_batch(global_batch, weight_share) == expected
+
+
+@pytest.mark.parametrize(
+    'config_file_exists, has_clients, expected_config_path, expected_exit_code, '
+    'load_config_raises, media_to_return, expected_trigger_called',
+    [
+        (
+            case.get('config_file_exists'),
+            case.get('has_clients'),
+            case.get('expected_config_path'),
+            case.get('expected_exit_code'),
+            case.get('load_config_raises', False),
+            case.get('media_to_return'),
+            case.get('expected_trigger_called', False),
+        )
+        for case in _run_cases.values()
+    ],
+    ids=list(_run_cases.keys()),
+)
+def test_run(
+    config_file_exists: Any,
+    has_clients: Any,
+    expected_config_path: Any,
+    expected_exit_code: Any,
+    load_config_raises: Any,
+    media_to_return: Any,
+    expected_trigger_called: Any,
+) -> None:
+    """Test run function loads config and executes searches."""
+
+    def is_file_mock(path_obj: Any) -> Any:
+        return str(path_obj) == config_file_exists if config_file_exists else False
+
+    mock_client = MagicMock()
+    mock_client.name = 'Test'
+    mock_client.weight = 1.0
+    mock_client.get_media_to_search.return_value = media_to_return or []
+
+    with (
+        patch('pathlib.Path.is_file', new=is_file_mock),
+        patch('rangarr.main.load_config') as mock_load,
+        patch('rangarr.main.build_arr_clients') as mock_build,
+    ):
+        if load_config_raises == 'FileNotFoundError':
+            mock_load.side_effect = FileNotFoundError()
+        elif load_config_raises:
+            mock_load.side_effect = ValueError('bad config')
+        elif config_file_exists is not None:
+            mock_load.return_value = _make_run_config()
+
+        mock_build.return_value = ([mock_client] if has_clients else []), 0
+
+        from rangarr.main import run
+
+        if expected_exit_code:
+            with pytest.raises(SystemExit) as exc_info:
+                run()
+            assert exc_info.value.code == expected_exit_code
+        else:
+            with (
+                patch('rangarr.main.time.sleep', side_effect=KeyboardInterrupt),
+                pytest.raises(KeyboardInterrupt),
+            ):
+                run()
+            if expected_config_path:
+                mock_load.assert_called_once_with(expected_config_path)
+            if expected_trigger_called:
+                mock_client.trigger_search.assert_called_once_with(media_to_return)

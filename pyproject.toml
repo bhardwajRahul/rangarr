@@ -1,0 +1,111 @@
+[project]
+name = "rangarr"
+version = "0.1.0"
+description = "Python-based orchestration service for *arr clients"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0.1",
+    "requests>=2.31.0",
+]
+
+[tool.ruff]
+line-length = 120
+preview = true
+
+[tool.ruff.lint]
+select = ["I", "E", "W", "D"]
+ignore = ["E402", "E501", "E722", "D102", "D105"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.pylint.master]
+jobs = 0
+
+[tool.pylint.messages_control]
+disable = [
+    "line-too-long",
+    "duplicate-code",
+    "arguments-differ",
+    "import-outside-toplevel",
+    "too-few-public-methods",
+    "logging-fstring-interpolation",
+]
+
+[tool.pylint.design]
+max-returns = 2
+max-args = 10
+max-positional-arguments = 10
+max-attributes = 15
+max-locals = 20
+max-parents = 8
+
+[tool.mypy]
+disallow_untyped_defs = true
+# Disable all other checks as per "Only enabled check: disallow_untyped_defs"
+disable_error_code = [
+    "attr-defined",
+    "name-defined",
+    "arg-type",
+    "index",
+    "import-untyped",
+    "operator",
+    "valid-type",
+    "var-annotated",
+    "misc",
+    "no-any-return",
+    "assignment",
+    "union-attr",
+    "call-arg",
+    "type-var",
+    "import",
+    "no-untyped-call",
+    "list-item",
+    "dict-item",
+]
+check_untyped_defs = false
+disallow_any_generics = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+no_implicit_optional = false
+warn_redundant_casts = false
+warn_unused_ignores = false
+warn_return_any = true
+warn_no_return = false
+strict_optional = true
+follow_imports = "skip"
+incremental = false
+exclude = [
+    "__pycache__",
+    "build",
+    "dist",
+    "product_cli_versions",
+    "system_testing",
+    "vendor",
+]
+
+[tool.bandit]
+skips = []
+# Bandit CLI should be run with -lll to fulfill "high only"
+# but some versions support configuration in pyproject.toml
+# However, severity is usually a CLI flag.
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "--cov=rangarr --cov-fail-under=95"
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "mypy>=1.19.1",
+    "pylint>=4.0.5",
+    "pytest>=8.3.4",
+    "ruff>=0.15.6",
+]

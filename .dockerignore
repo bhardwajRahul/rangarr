@@ -1,0 +1,56 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+bin/
+lib/
+include/
+
+# Testing and code quality
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Distribution
+*.egg-info/
+dist/
+build/
+
+# Configuration
+config.yaml
+uv.lock
+
+# IDE
+.idea/
+.vscode/
+.claude/
+*.swp
+
+# Documentation
+README.md
+SETUP.md
+LICENSE
+
+# Docker
+Dockerfile
+.dockerignore
+compose.example.yaml
+
+# Development
+requirements-dev.txt
+setup.sh
+pre-push.sh

@@ -1,0 +1,189 @@
+"""Configuration loader and validator for Rangarr."""
+
+from typing import Any
+
+import yaml
+
+REQUIRED_TOP_LEVEL = ('instances',)
+VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
+
+SETTINGS_SCHEMA = {
+    'missing_batch_size': {
+        'default': 20,
+        'type': int,
+    },
+    'retry_interval_days': {
+        'default': 30,
+        'type': int,
+    },
+    'run_interval_minutes': {
+        'default': 60,
+        'type': int,
+    },
+    'dry_run': {
+        'default': False,
+        'type': bool,
+    },
+    'search_order': {
+        'default': 'last_searched_ascending',
+        'type': str,
+        'choices': (
+            'alphabetical_ascending',
+            'alphabetical_descending',
+            'last_added_ascending',
+            'last_added_descending',
+            'last_searched_ascending',
+            'last_searched_descending',
+            'random',
+            'release_date_ascending',
+            'release_date_descending',
+        ),
+    },
+    'stagger_interval_seconds': {
+        'default': 30,
+        'type': int,
+    },
+    'upgrade_batch_size': {
+        'default': 10,
+        'type': int,
+    },
+}
+
+
+def _parse_instance(name: str, config: dict) -> tuple[str, dict] | None:
+    """Parse and validate single instance configuration."""
+    instance = config.copy()
+    if 'host' in instance:
+        instance['url'] = instance.pop('host')
+    inst_type = instance.pop('type', None)
+    if not inst_type:
+        raise ValueError(f"Missing 'type' field for instance '{name}'. Must be either 'Radarr', 'Sonarr', or 'Lidarr'.")
+    if inst_type not in VALID_ARR_TYPES:
+        raise ValueError(
+            f"Invalid type '{inst_type}' for instance '{name}'. Must be either 'Radarr', 'Sonarr', or 'Lidarr'."
+        )
+    instance['name'] = name
+    for field in ('url', 'api_key'):
+        if not instance.get(field):
+            raise ValueError(f"Missing or empty '{field}' for instance '{name}'.")
+    default_weight = 0.1 if inst_type == 'lidarr' else 1
+    instance.setdefault('weight', default_weight)
+    if not isinstance(instance['weight'], (int, float)) or instance['weight'] <= 0:
+        raise ValueError(f"'weight' for instance '{name}' must be a positive number.")
+    result = None
+    if instance.get('enabled', False):
+        result = (inst_type, instance)
+    return result
+
+
+def _validate_global_settings(settings: dict, schema: dict) -> None:
+    """Validate all global settings against their schema."""
+    for setting, definition in schema.items():
+        settings.setdefault(setting, definition['default'])
+        _validate_setting(setting, settings[setting], definition['type'], definition.get('choices'), prefix='global')
+
+
+def _validate_setting(
+    setting: str, value: Any, expected_type: type, choices: tuple = None, prefix: str = 'global'
+) -> None:
+    """Validate a setting value based on its expected type."""
+    if not isinstance(value, expected_type):
+        raise ValueError(f"'{prefix}.{setting}' must be of type {expected_type.__name__}.")
+    if expected_type is int and value < 0:
+        raise ValueError(f"'{prefix}.{setting}' must be a non-negative integer.")
+    if choices is not None and value not in choices:
+        valid_choices = ', '.join(repr(choice) for choice in choices)
+        raise ValueError(f"'{prefix}.{setting}' must be one of: {valid_choices}.")
+
+
+def get_setting_default(setting: str) -> Any:
+    """Get the default value for a setting from the schema.
+
+    Args:
+        setting: The setting name.
+
+    Returns:
+        The default value for the setting.
+
+    Raises:
+        KeyError: If the setting is not defined in the schema.
+    """
+    return SETTINGS_SCHEMA[setting]['default']
+
+
+def load_config(path: str) -> dict:
+    """Load and validate the YAML configuration file.
+
+    Args:
+        path: Filesystem path to config.yaml.
+
+    Returns:
+        Parsed configuration dictionary.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If required keys are missing or values are invalid.
+    """
+    with open(path, encoding='utf-8') as file:
+        config = yaml.safe_load(file)
+
+    if config is None:
+        config = {}
+
+    return parse_config(config)
+
+
+def parse_config(config: Any) -> dict:
+    """Validate a loaded YAML configuration dictionary.
+
+    Args:
+        config: The parsed configuration object.
+
+    Returns:
+        Validated and normalized configuration dictionary.
+
+    Raises:
+        ValueError: If required keys are missing or values are invalid.
+    """
+    if not isinstance(config, dict):
+        raise ValueError('Configuration file must be a YAML mapping at the top level.')
+
+    for key in REQUIRED_TOP_LEVEL:
+        if key not in config:
+            raise ValueError(f"Missing required top-level key: '{key}'")
+
+    settings = config.get('global', {})
+    if not isinstance(settings, dict):
+        raise ValueError("'global' must be a YAML mapping.")
+
+    # Convert interval (seconds) to run_interval_minutes.
+    if 'interval' in settings:
+        if not isinstance(settings['interval'], int):
+            raise ValueError("'global.interval' must be an integer.")
+        settings['run_interval_minutes'] = settings['interval'] // 60
+
+    _validate_global_settings(settings, SETTINGS_SCHEMA)
+    config['global_settings'] = settings
+
+    raw_instances = config.get('instances', {})
+    if not isinstance(raw_instances, dict):
+        raise ValueError("'instances' must be a YAML mapping.")
+
+    final_instances = {'radarr': [], 'sonarr': [], 'lidarr': []}
+    all_empty = True
+
+    for instance_name, instance_config in raw_instances.items():
+        if not isinstance(instance_config, dict):
+            raise ValueError(f"Instance '{instance_name}' must be a YAML mapping.")
+
+        parsed = _parse_instance(instance_name, instance_config)
+        if parsed is not None:
+            inst_type, inst = parsed
+            all_empty = False
+            final_instances[inst_type].append(inst)
+
+    if all_empty:
+        raise ValueError("No instances defined under 'instances'. Add at least one Radarr, Sonarr, or Lidarr instance.")
+
+    config['instances'] = final_instances
+    return config
