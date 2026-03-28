@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-28
+
+### Fixed
+
+- Sonarr API calls no longer incorrectly pass `includeSeries` (a Radarr-only parameter)
+
+### Changed
+
+- Documentation updated to include `docker run` usage and a `docker compose` example
+
 ## [0.2.1] - 2026-03-27
 
 ### Added
