@@ -47,6 +47,18 @@ nano config.yaml
 docker compose up -d
 ```
 
+**Without Compose**, use `docker run` directly:
+
+```bash
+docker run -d \
+  --name rangarr \
+  --restart unless-stopped \
+  -v ./config.yaml:/app/config/config.yaml:ro \
+  judochinx/rangarr:latest
+```
+
+See the [User Guide](docs/user-guide.md#docker-run) for full details including Docker networking.
+
 A minimal `config.yaml` to get you running:
 
 ```yaml

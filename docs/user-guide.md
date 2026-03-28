@@ -11,8 +11,8 @@ Complete guide to installing, configuring, and operating Rangarr.
 - [Configuration Reference](#configuration-reference)
   - [Environment Variable Expansion](#environment-variable-expansion)
 - [Docker](#docker)
-  - [Updating Rangarr](#updating-rangarr)
-  - [Timezone](#timezone)
+  - [Docker Compose](#docker-compose)
+  - [Docker Run](#docker-run)
   - [Docker Networking](#docker-networking)
 - [Indexer Safety & Limits](#indexer-safety--limits)
 - [Operational Best Practices](#operational-best-practices)
@@ -355,10 +355,38 @@ global:
 
 ## Docker
 
-### Updating Rangarr
+### Docker Compose
 
-Pull the latest image and restart:
+A minimal `compose.yaml`:
 
+```yaml
+services:
+  rangarr:
+    image: judochinx/rangarr:latest
+    container_name: rangarr
+    hostname: rangarr
+    restart: unless-stopped
+    environment:
+      TZ: UTC          # Set your timezone for log timestamps (e.g. America/New_York). Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      LOG_LEVEL: INFO  # Use DEBUG for verbose logging
+    volumes:
+      - ./config.yaml:/app/config/config.yaml:ro
+    networks:
+      - arr
+
+networks:
+  arr:
+    external: true
+```
+
+The `networks` block is optional but recommended — it keeps traffic between Rangarr and your *arr containers internal rather than routing through the host. If you omit it, use `http://localhost:<port>` hostnames in `config.yaml` instead. If you include it, the `arr` network must exist before starting — see [Docker Networking](#docker-networking). The [Quick Start](#quick-start-docker) section covers the full setup flow.
+
+**View logs:**
+```bash
+docker compose logs -f
+```
+
+**Update to a new release:**
 ```bash
 docker compose pull
 docker compose up -d
@@ -366,16 +394,44 @@ docker compose up -d
 
 This downloads the new image and recreates the container. Your `config.yaml` is unchanged.
 
-### Timezone
+### Docker Run
 
-Set `TZ` in `compose.yaml` to your local timezone so log timestamps are readable:
+If you prefer not to use Compose, you can run Rangarr with a single `docker run` command. First, prepare your config file:
 
-```yaml
-environment:
-  TZ: America/New_York  # or Europe/London, Australia/Sydney, etc.
+```bash
+curl -O https://raw.githubusercontent.com/JudoChinX/rangarr/main/config.example.yaml
+mv config.example.yaml config.yaml
+chmod 644 config.yaml  # Required: container runs as UID 65532 (nonroot)
+# Edit config.yaml with your *arr API keys and hostnames
 ```
 
-Without this, logs use UTC. A full list of timezone names is available at [en.wikipedia.org/wiki/List_of_tz_database_time_zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+Then start the container:
+
+```bash
+docker run -d \
+  --name rangarr \
+  --hostname rangarr \
+  --restart unless-stopped \
+  --network arr \
+  -e TZ=UTC \
+  -e LOG_LEVEL=INFO \
+  -v ./config.yaml:/app/config/config.yaml:ro \
+  judochinx/rangarr:latest
+```
+
+Replace `TZ=UTC` with your local timezone (e.g. `America/New_York`). The `--network arr` flag is optional but recommended — it keeps traffic between Rangarr and your *arr containers on an internal network rather than routing through the host. If you omit it, use `http://localhost:<port>` hostnames in `config.yaml` instead. See [Docker Networking](#docker-networking).
+
+**View logs:**
+```bash
+docker logs -f rangarr
+```
+
+**Update to a new release:**
+```bash
+docker pull judochinx/rangarr:latest
+docker stop rangarr && docker rm rangarr
+# Re-run the docker run command above
+```
 
 ### Docker Networking
 
