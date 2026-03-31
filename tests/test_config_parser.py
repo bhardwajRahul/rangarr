@@ -10,6 +10,7 @@ from rangarr.config_parser import SETTINGS_SCHEMA
 from rangarr.config_parser import get_setting_default
 from rangarr.config_parser import load_config
 from rangarr.config_parser import parse_config
+from tests.helpers import assert_config_result
 
 _load_config_cases = {
     'file_not_found': {
@@ -181,6 +182,21 @@ _parse_config_cases = {
         },
         'expected_error': "'global.search_order' must be one of: 'alphabetical_ascending', 'alphabetical_descending', 'last_added_ascending', 'last_added_descending', 'last_searched_ascending', 'last_searched_descending', 'random', 'release_date_ascending', 'release_date_descending'.",
     },
+    'mixed_case_instance_type_accepted': {
+        'config_data': {
+            'instances': {
+                'my-movies': {
+                    'type': 'Radarr',
+                    'url': 'http://localhost:7878',
+                    'api_key': 'somekey',
+                    'enabled': True,
+                }
+            }
+        },
+        'expected_result': {
+            'instances': {'radarr': [{'name': 'my-movies'}]},
+        },
+    },
     'invalid_instance_type': {
         'config_data': {
             'instances': {
@@ -191,7 +207,7 @@ _parse_config_cases = {
                 }
             }
         },
-        'expected_error': "Invalid type 'readarr' for instance 'readarr'. Must be either 'Radarr', 'Sonarr', or 'Lidarr'.",
+        'expected_error': "Invalid type 'readarr' for instance 'readarr'. Must be one of: radarr, sonarr, lidarr.",
     },
     'empty_instances_dict': {
         'config_data': {'instances': {}},
@@ -463,20 +479,6 @@ _parse_config_cases = {
 }
 
 
-def _assert_parse_config_result(result: Any, expected_result: Any) -> None:
-    """Assert that the parsed config result matches all expected keys and values."""
-    for key, value in expected_result.items():
-        if key == 'global_settings':
-            for setting_key, setting_value in value.items():
-                assert result['global_settings'][setting_key] == setting_value
-        elif key == 'instances':
-            for arr_type, instances_list in value.items():
-                assert len(result['instances'][arr_type]) >= len(instances_list)
-                for index, expected_instance in enumerate(instances_list):
-                    for instance_key, instance_value in expected_instance.items():
-                        assert result['instances'][arr_type][index][instance_key] == instance_value
-
-
 @pytest.mark.parametrize(
     'file_exists, file_path, expected_error',
     [
@@ -524,7 +526,7 @@ def test_parse_config(config_data: Any, expected_error: Any, expected_result: An
         with pytest.raises(ValueError, match=re.escape(expected_error)):
             parse_config(config_data)
     else:
-        _assert_parse_config_result(parse_config(config_data), expected_result)
+        assert_config_result(parse_config(config_data), expected_result)
 
 
 def test_get_setting_default_returns_schema_values() -> None:

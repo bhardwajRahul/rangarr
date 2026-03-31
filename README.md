@@ -77,6 +77,23 @@ instances:
     enabled: true
 ```
 
+## Quick Start (Environment Variables Only)
+
+If you prefer not to use a `config.yaml` file, you can configure Rangarr entirely through environment variables.
+
+```bash
+docker run -d \
+  --name rangarr \
+  --restart unless-stopped \
+  -e RANGARR_CONFIG_SOURCE=env \
+  -e RANGARR_GLOBAL_INTERVAL=3600 \
+  -e RANGARR_INSTANCE_0_NAME=MyRadarr \
+  -e RANGARR_INSTANCE_0_TYPE=radarr \
+  -e RANGARR_INSTANCE_0_URL=http://radarr:7878 \
+  -e RANGARR_INSTANCE_0_API_KEY=YOUR_API_KEY \
+  judochinx/rangarr:latest
+```
+
 ## Documentation
 
 - **[User Guide](docs/user-guide.md)** — Setup, configuration, Docker networking, and troubleshooting.
