@@ -19,6 +19,7 @@ from rangarr.clients.arr import RadarrClient
 from rangarr.clients.arr import SonarrClient
 from rangarr.config_parser import get_setting_default
 from rangarr.config_parser import load_config
+from rangarr.config_parser import load_config_from_env
 
 if 'TZ' not in os.environ:
     os.environ['TZ'] = 'UTC'
@@ -209,11 +210,25 @@ def build_arr_clients(
 def run() -> None:
     """Load configuration and start the search loop.
 
-    Reads the configuration file, instantiates the *arr clients, and enters
-    an infinite loop to run periodic searches based on the configured
-    intervals.
+    Reads the configuration file or environment variables, instantiates
+    the *arr clients, and enters an infinite loop to run periodic searches
+    based on the configured intervals.
     """
-    config = _load_config_from_paths(['config/config.yaml', 'config.yaml'])
+    config_source = os.environ.get('RANGARR_CONFIG_SOURCE', 'file').lower()
+    if config_source == 'env':
+        logger.info('Loading configuration from environment variables.')
+        try:
+            config = load_config_from_env()
+        except ValueError as error:
+            logger.error(f'Configuration error from environment: {error}')
+            config = None
+    else:
+        if config_source != 'file':
+            logger.warning(
+                f"Unrecognized RANGARR_CONFIG_SOURCE value '{config_source}'. Expected 'file' or 'env'. Falling back to file mode."
+            )
+        config = _load_config_from_paths(['config/config.yaml', 'config.yaml'])
+
     if not config:
         sys.exit(1)
 

@@ -8,8 +8,10 @@ Complete guide to installing, configuring, and operating Rangarr.
 
 - [Prerequisites](#prerequisites)
 - [Quick Start (Docker)](#quick-start-docker)
+- [Configuration Sources](#configuration-sources)
 - [Configuration Reference](#configuration-reference)
   - [Environment Variable Expansion](#environment-variable-expansion)
+  - [Environment Variable-Only Configuration](#environment-variable-only-configuration)
 - [Docker](#docker)
   - [Docker Compose](#docker-compose)
   - [Docker Run](#docker-run)
@@ -62,6 +64,19 @@ The fastest way to get Rangarr running:
    ```bash
    docker compose logs -f
    ```
+
+---
+
+## Configuration Sources
+
+Rangarr supports two primary configuration methods:
+1. **YAML File (Default):** Configured via `config/config.yaml`.
+2. **Environment Variables:** Configured via `RANGARR_GLOBAL_*` and `RANGARR_INSTANCE_*` variables.
+
+To switch to environment-only configuration, set:
+```bash
+RANGARR_CONFIG_SOURCE=env
+```
 
 ---
 
@@ -349,6 +364,57 @@ global:
 global:
   missing_batch_size: -1  # Search all missing items
   upgrade_batch_size: 0   # Skip upgrade searches entirely
+```
+
+### Environment Variable-Only Configuration
+
+Set `RANGARR_CONFIG_SOURCE=env` to have Rangarr ignore `config.yaml` entirely and read all configuration from environment variables. This is useful for container deployments where injecting a config file is inconvenient.
+
+#### Global Settings
+
+The following global settings are supported, each prefixed with `RANGARR_GLOBAL_`. All values are type-coerced automatically — `"true"`/`"false"` become booleans and numeric strings become integers or floats.
+
+| Variable | Default | Description |
+|---|---|---|
+| `RANGARR_GLOBAL_INTERVAL` | `3600` | Run interval in seconds (converted to minutes internally). |
+| `RANGARR_GLOBAL_RUN_INTERVAL_MINUTES` | `60` | Run interval in minutes. Ignored if `INTERVAL` is also set. |
+| `RANGARR_GLOBAL_MISSING_BATCH_SIZE` | `20` | Items to search per instance per cycle. `0` disables, `-1` is unlimited. |
+| `RANGARR_GLOBAL_UPGRADE_BATCH_SIZE` | `10` | Upgrade-eligible items to search per cycle. `0` disables, `-1` is unlimited. |
+| `RANGARR_GLOBAL_STAGGER_INTERVAL_SECONDS` | `30` | Delay between individual search triggers. |
+| `RANGARR_GLOBAL_RETRY_INTERVAL_DAYS` | `30` | Days before a previously searched item is eligible again. `0` disables. |
+| `RANGARR_GLOBAL_SEARCH_ORDER` | `last_searched_ascending` | One of: `alphabetical_ascending`, `alphabetical_descending`, `last_added_ascending`, `last_added_descending`, `last_searched_ascending`, `last_searched_descending`, `random`, `release_date_ascending`, `release_date_descending`. |
+| `RANGARR_GLOBAL_DRY_RUN` | `false` | Log searches without triggering them. |
+
+#### Instance Settings
+
+Each instance is identified by a numeric index. Prefix instance fields with `RANGARR_INSTANCE_<INDEX>_` where `<INDEX>` is any non-negative integer. Indices do not need to be sequential — you can define instances at index `0` and `2` without `1`.
+
+| Variable | Required | Description |
+|---|---|---|
+| `RANGARR_INSTANCE_<n>_NAME` | Yes | Unique name for this instance. |
+| `RANGARR_INSTANCE_<n>_TYPE` | Yes | `radarr`, `sonarr`, or `lidarr` (case-insensitive). |
+| `RANGARR_INSTANCE_<n>_URL` | Yes | Base URL of the instance (e.g. `http://radarr:7878`). `HOST` is accepted as an alias. |
+| `RANGARR_INSTANCE_<n>_API_KEY` | Yes | API key from the instance's settings page. |
+| `RANGARR_INSTANCE_<n>_ENABLED` | No | Defaults to `true`. Set to `false` to disable without removing the variable. |
+| `RANGARR_INSTANCE_<n>_WEIGHT` | No | Relative search weight. Defaults to `1` for Radarr/Sonarr, `0.1` for Lidarr. |
+
+#### Example
+
+```bash
+RANGARR_CONFIG_SOURCE=env
+RANGARR_GLOBAL_INTERVAL=1800
+RANGARR_GLOBAL_DRY_RUN=false
+
+RANGARR_INSTANCE_0_NAME=Movies
+RANGARR_INSTANCE_0_TYPE=radarr
+RANGARR_INSTANCE_0_URL=http://radarr:7878
+RANGARR_INSTANCE_0_API_KEY=your-api-key
+RANGARR_INSTANCE_0_WEIGHT=2
+
+RANGARR_INSTANCE_1_NAME=TV
+RANGARR_INSTANCE_1_TYPE=sonarr
+RANGARR_INSTANCE_1_URL=http://sonarr:8989
+RANGARR_INSTANCE_1_API_KEY=your-api-key
 ```
 
 ---

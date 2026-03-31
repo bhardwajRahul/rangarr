@@ -3,10 +3,23 @@ services:
     image: judochinx/rangarr:latest
     container_name: rangarr
     hostname: rangarr
-    restart: unless-stopped  # Restart automatically unless manually stopped.
     environment:
       TZ: UTC  # Set your timezone for log timestamps (e.g. America/New_York, Europe/London).
       LOG_LEVEL: INFO  # Use DEBUG for verbose logging.
+      # To use environment variables instead of config.yaml, uncomment these:
+      # RANGARR_CONFIG_SOURCE: env
+      # RANGARR_GLOBAL_INTERVAL: 3600
+      # RANGARR_INSTANCE_0_NAME: Radarr
+      # RANGARR_INSTANCE_0_TYPE: radarr
+      # RANGARR_INSTANCE_0_URL: http://radarr:7878
+      # RANGARR_INSTANCE_0_API_KEY: YOUR_API_KEY
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro  # Mount config as read-only.
+    networks:
+      - arr
+    restart: unless-stopped  # Restart automatically unless manually stopped.
     # View logs with: docker compose logs -f.
+
+networks:
+  arr:
+    external: true  # Replace 'arr' with the name of your existing Docker network, or remove this block and the 'networks' key above to use the default bridge network.

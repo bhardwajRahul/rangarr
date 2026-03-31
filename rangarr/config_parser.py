@@ -76,17 +76,34 @@ def _expand_env_vars(obj: Any) -> Any:
     return result
 
 
+def _parse_env_value(value: str) -> Any:
+    """Convert an environment string value to a boolean, integer, float, or string."""
+    val_lower = value.lower()
+    result = value
+
+    if val_lower == 'true':
+        result = True
+    elif val_lower == 'false':
+        result = False
+    elif re.match(r'^-?\d+$', value):
+        result = int(value)
+    elif re.match(r'^-?\d+\.\d+$', value):
+        result = float(value)
+
+    return result
+
+
 def _parse_instance(name: str, config: dict) -> tuple[str, dict] | None:
     """Parse and validate a single instance configuration."""
     instance = config.copy()
     if 'host' in instance:
         instance['url'] = instance.pop('host')
-    inst_type = instance.pop('type', None)
+    inst_type = str(instance.pop('type', None) or '').lower()
     if not inst_type:
-        raise ValueError(f"Missing 'type' field for instance '{name}'. Must be either 'Radarr', 'Sonarr', or 'Lidarr'.")
+        raise ValueError(f"Missing 'type' field for instance '{name}'. Must be one of: {', '.join(VALID_ARR_TYPES)}.")
     if inst_type not in VALID_ARR_TYPES:
         raise ValueError(
-            f"Invalid type '{inst_type}' for instance '{name}'. Must be either 'Radarr', 'Sonarr', or 'Lidarr'."
+            f"Invalid type '{inst_type}' for instance '{name}'. Must be one of: {', '.join(VALID_ARR_TYPES)}."
         )
     instance['name'] = name
     for field in ('url', 'api_key'):
@@ -178,6 +195,46 @@ def load_config(path: str) -> dict:
         config = {}
 
     config = _expand_env_vars(config)
+    return parse_config(config)
+
+
+def load_config_from_env() -> dict:
+    """Load configuration from environment variables.
+
+    Scans for RANGARR_GLOBAL_* and RANGARR_INSTANCE_{index}_* variables to
+    build a configuration dictionary compatible with parse_config.
+
+    Returns:
+        Validated and normalized configuration dictionary.
+
+    Raises:
+        ValueError: If required keys are missing or values are invalid.
+    """
+    config = {'global': {}, 'instances': {}}
+    instance_data = {}
+
+    for key, value in os.environ.items():
+        if key.startswith('RANGARR_GLOBAL_'):
+            setting_name = key.removeprefix('RANGARR_GLOBAL_').lower()
+            config['global'][setting_name] = _parse_env_value(value)
+        elif key.startswith('RANGARR_INSTANCE_'):
+            remainder = key.removeprefix('RANGARR_INSTANCE_')
+            match = re.match(r'(?P<index>\d+)_(?P<field>.+)', remainder)
+            if match:
+                index = int(match.group('index'))
+                field = match.group('field').lower()
+                instance_data.setdefault(index, {})[field] = _parse_env_value(value)
+
+    for index in sorted(instance_data.keys()):
+        data = instance_data[index].copy()
+        if 'name' not in data:
+            raise ValueError(f"Missing 'name' for instance at index {index}.")
+        name = data.pop('name')
+        if name in config['instances']:
+            raise ValueError(f"Duplicate instance name '{name}' found at index {index}.")
+        data.setdefault('enabled', True)
+        config['instances'][name] = data
+
     return parse_config(config)
 
 
