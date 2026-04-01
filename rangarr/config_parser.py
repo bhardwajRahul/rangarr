@@ -1,10 +1,13 @@
 """Configuration loader and validator for Rangarr."""
 
+import logging
 import os
 import re
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 REQUIRED_TOP_LEVEL = ('instances',)
 VALID_ARR_TYPES = ('radarr', 'sonarr', 'lidarr')
@@ -109,8 +112,7 @@ def _parse_instance(name: str, config: dict) -> tuple[str, dict] | None:
     for field in ('url', 'api_key'):
         if not instance.get(field):
             raise ValueError(f"Missing or empty '{field}' for instance '{name}'.")
-    default_weight = 0.1 if inst_type == 'lidarr' else 1
-    instance.setdefault('weight', default_weight)
+    instance.setdefault('weight', 1)
     if not isinstance(instance['weight'], (int, float)) or instance['weight'] <= 0:
         raise ValueError(f"'weight' for instance '{name}' must be a positive number.")
     result = None
@@ -202,7 +204,8 @@ def load_config_from_env() -> dict:
     """Load configuration from environment variables.
 
     Scans for RANGARR_GLOBAL_* and RANGARR_INSTANCE_{index}_* variables to
-    build a configuration dictionary compatible with parse_config.
+    build a configuration dictionary compatible with parse_config. Instance
+    slots with an absent or empty name are skipped with a warning log.
 
     Returns:
         Validated and normalized configuration dictionary.
@@ -227,13 +230,14 @@ def load_config_from_env() -> dict:
 
     for index in sorted(instance_data.keys()):
         data = instance_data[index].copy()
-        if 'name' not in data:
-            raise ValueError(f"Missing 'name' for instance at index {index}.")
-        name = data.pop('name')
-        if name in config['instances']:
-            raise ValueError(f"Duplicate instance name '{name}' found at index {index}.")
-        data.setdefault('enabled', True)
-        config['instances'][name] = data
+        name = data.pop('name', '')
+        if name:
+            if name in config['instances']:
+                raise ValueError(f"Duplicate instance name '{name}' found at index {index}.")
+            data.setdefault('enabled', True)
+            config['instances'][name] = data
+        else:
+            logger.warning(f'Skipping unconfigured instance slot at index {index} (name is empty).')
 
     return parse_config(config)
 
