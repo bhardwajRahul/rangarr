@@ -10,6 +10,10 @@
 [![Docker Scout](https://img.shields.io/badge/docker%20scout-enabled-blue)](https://hub.docker.com/r/judochinx/rangarr)
 [![Architectures](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue)](https://hub.docker.com/r/judochinx/rangarr/tags)
 
+<p align="center">
+  <img src="https://github.com/JudoChinX/unraid-templates/raw/main/assets/rangarr-logo.png" alt="Rangarr Logo">
+</p>
+
 **Rangarr** is a lightweight orchestration service that automates and staggers media searches across multiple *arr instances ([Radarr](https://github.com/Radarr/Radarr), [Sonarr](https://github.com/Sonarr/Sonarr), [Lidarr](https://github.com/Lidarr/Lidarr)). It helps keep your library complete without overwhelming your indexers or API limits.
 
 ## Key Features
