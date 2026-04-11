@@ -104,6 +104,7 @@ docker run -d \
 - **[Technical Audit](docs/technical-audit.md)** — Architecture, security model, and design philosophy.
 - **[Security & Trust](SECURITY.md)** — What Rangarr does and doesn't do, how to verify it, and how to report vulnerabilities.
 - **[Contributing](CONTRIBUTING.md)** — How to help improve Rangarr.
+- **[Roadmap](ROADMAP.md)** — Planned and in-progress features.
 
 ## Development Transparency
 
