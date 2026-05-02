@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-02
+
 ### Changed
 
 - **Global search slot allocation:** Rangarr now uses a centralized weighted round-robin "dealer" to distribute search slots across all active instances rather than processing each instance independently. The search cycle runs as a three-stage pipeline:
